@@ -33,25 +33,26 @@ void *handle_connection_request(void *args) {
 	while (1) {
 		if (strlen(connect_chan.req_shm) > 0) {
 			sem_wait(connect_chan.req_sem);
-			printf("[INCOMING] connect: %s", connect_chan.req_shm);
+			printf("[INCOMING] connect: %s\n", connect_chan.req_shm);
 
 			const char *msg;
 			int code;
-			int key;
+			int key = -1;
 
 			int found = 0;
 			for (int i = 0; i < client_count; i++) {
 				if (strcmp(clients[i].name, connect_chan.req_shm) == 0) {
 					found = 1;
-					connect_chan.res_shm->code = CODE_INVALID_REQ;
-					strcpy(connect_chan.res_shm->msg, "name already exist");
+					code = CODE_INVALID_REQ;
+					msg = "name already exist";
 					break;
 				}
 			}
 
 			if (found == 0) {
-				key = comm_channel_create(connect_chan.req_shm, &channels[client_count]);
-				if (key == -1) {
+				key = hash(connect_chan.req_shm);
+				int status = comm_channel_create(key, &channels[client_count]);
+				if (status == -1) {
 					code = CODE_SERVER_ERR;
 					msg = "something went wrong";
 				} else {
@@ -64,6 +65,7 @@ void *handle_connection_request(void *args) {
 						strcpy(clients[client_count].name, connect_chan.req_shm);
 						clients[client_count].key = key;
 						client_count++;
+						printf("%d clients connected\n", client_count);
 
 						code = CODE_SUCCESS;
 						msg = "success";
@@ -72,7 +74,7 @@ void *handle_connection_request(void *args) {
 			}
 
 			sem_wait(connect_chan.res_sem);
-			printf("[RESPONSE] name: %s\tcode: %d\tmsg: %s\tkey: %d", connect_chan.req_shm, code, msg, key);
+			printf("[OUTGOING] name:%s  code:%d  msg:%s  key:%d\n", connect_chan.req_shm, code, msg, key);
 			connect_chan.res_shm->code = code;
 			connect_chan.res_shm->key = key;
 			strcpy(connect_chan.res_shm->name, connect_chan.req_shm);
@@ -81,6 +83,7 @@ void *handle_connection_request(void *args) {
 
 			strcpy(connect_chan.req_shm, "");
 			sem_post(connect_chan.req_sem);
+			fflush(stdout);
 		}
 
 		usleep(100);

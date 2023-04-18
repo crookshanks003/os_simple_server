@@ -42,7 +42,10 @@ extern int connect_channel_create(connect_channel_t *ch);
 /* Call all the cleanup functions for the given channel.  */
 extern void connect_channel_exit(connect_channel_t *ch);
 
-/* Create communication channel and returns a unique key. The shared memory object is stored in ch. */
-extern int comm_channel_create(char *name, comm_channel_t *ch);
+/* Creates an unique hash for the given string*/
+extern int hash(const char *name);
+
+/* Create communication channel. The shared memory object is stored in ch. */
+extern int comm_channel_create(int key, comm_channel_t *ch);
 
 __END_DECLS

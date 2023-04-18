@@ -55,7 +55,6 @@ void connect_channel_exit(connect_channel_t *ch) {
 	return;
 }
 
-// creates an unique hash for the given string
 int hash(const char *name) {
 	int key = 0;
 	int l = 2;
@@ -69,9 +68,7 @@ int hash(const char *name) {
 	return key;
 }
 
-int comm_channel_create(char *name, comm_channel_t *ch) {
-	int key = hash(name);
-
+int comm_channel_create(int key, comm_channel_t *ch) {
 	int req_fd = shmget(key + 113, 1024, IPC_CREAT | 0666);
 	if (req_fd < 0) {
 		printf("failed to shmget req");
@@ -97,5 +94,5 @@ int comm_channel_create(char *name, comm_channel_t *ch) {
 	ch->res_shm = res_shm;
 	ch->req_shm = req_shm;
 
-	return key;
+	return 0;
 }
