@@ -71,23 +71,23 @@ int hash(const char *name) {
 }
 
 int comm_channel_create(int key, char *name, comm_channel_t *ch) {
-	int req_fd = shmget(key + 113, sizeof(comm_request_t), IPC_CREAT | 0666);
-	if (req_fd < 0) {
+	int req_shmid = shmget(key + 113, sizeof(comm_request_t), IPC_CREAT | 0666);
+	if (req_shmid < 0) {
 		printf("failed to shmget req");
 		return -1;
 	}
-	comm_request_t *req_shm = (comm_request_t *)shmat(req_fd, NULL, 0);
+	comm_request_t *req_shm = (comm_request_t *)shmat(req_shmid, NULL, 0);
 	if (req_shm == (comm_request_t *)-1) {
 		printf("failed to attach to shared mem for req");
 		return -1;
 	}
 
-	int res_fd = shmget(key + 115, sizeof(comm_response_t), IPC_CREAT | 0666);
-	if (res_fd < 0) {
+	int res_shmid = shmget(key + 115, sizeof(comm_response_t), IPC_CREAT | 0666);
+	if (res_shmid < 0) {
 		printf("failed to create shared mem for res");
 		return -1;
 	}
-	comm_response_t *res_shm = (comm_response_t *)shmat(res_fd, NULL, 0);
+	comm_response_t *res_shm = (comm_response_t *)shmat(res_shmid, NULL, 0);
 	if (res_shm == (comm_response_t *)-1) {
 		printf("failed to attach to shared mem for res");
 		return -1;
@@ -104,6 +104,8 @@ int comm_channel_create(int key, char *name, comm_channel_t *ch) {
 	ch->res_shm = res_shm;
 	ch->req_shm = req_shm;
 	ch->sem = sem;
+	ch->req_shmid = req_shmid;
+	ch->res_shmid = res_shmid;
 
 	return 0;
 }
@@ -111,7 +113,6 @@ int comm_channel_create(int key, char *name, comm_channel_t *ch) {
 void comm_channel_exit(comm_channel_t *ch) {
 	shmdt(ch->res_shm);
 	shmdt(ch->req_shm);
-	sem_close(ch->sem);
 }
 
 void clean_comm_channel_request(comm_channel_t *ch) {

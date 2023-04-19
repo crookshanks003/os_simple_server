@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/shm.h>
 #include <unistd.h>
 
 #include "channels.h"
@@ -39,6 +40,26 @@ int is_prime(int num) {
 	return 1;
 }
 
+void deregister(comm_channel_t *ch) {
+	int i = 0;
+	while (clients[i].key != 0 && i < MAX_CLIENTS) {
+		if (clients[i].key == ch->req_shm->n1) {
+			clients[i].key = -1;
+			strcpy(clients[i].name, "0");
+		}
+		break;
+	}
+
+	client_count--;
+
+	shmdt(ch->req_shm);
+	shmdt(ch->res_shm);
+	shmctl(ch->req_shmid, IPC_RMID, NULL);
+	shmctl(ch->res_shmid, IPC_RMID, NULL);
+	sem_post(ch->sem);
+	sem_close(ch->sem);
+}
+
 void *comm_channel_worker(void *args) {
 	comm_channel_t *ch = (comm_channel_t *)args;
 	int req_id = ch->req_shm->id;
@@ -64,6 +85,11 @@ void *comm_channel_worker(void *args) {
 			case IS_PRIME:
 				result = is_prime(ch->req_shm->n1);
 				break;
+			case DEREGISTER:
+				deregister(ch);
+				printf("client deregistered\n");
+				pthread_exit(0);
+				break;
 			default:
 				code = CODE_INVALID_REQ;
 				msg = "unsupported operation";
@@ -87,7 +113,18 @@ void *comm_channel_worker(void *args) {
 	return NULL;
 }
 
+int get_empty_clients_index(char *name) {
+	int i = 0;
+	while (clients[i].key != 0) {
+		if (clients[i].key == -1) break;
+		if (strcmp(clients[i].name, name) == 0) return -1;
+		i++;
+	}
+	return i;
+}
+
 void *handle_connection_request(void *args) {
+	comm_channel_t channels[MAX_CLIENTS];
 	while (1) {
 		if (strlen(connect_chan.req_shm) > 0) {
 			sem_wait(connect_chan.req_sem);
@@ -97,32 +134,27 @@ void *handle_connection_request(void *args) {
 			int code;
 			int key = -1;
 
-			int found = 0;
-			for (int i = 0; i < client_count; i++) {
-				if (strcmp(clients[i].name, connect_chan.req_shm) == 0) {
-					found = 1;
-					code = CODE_INVALID_REQ;
-					msg = "name already exist";
-					break;
-				}
+			int index = get_empty_clients_index(connect_chan.req_shm);
+			if (index < 0) {
+				code = CODE_INVALID_REQ;
+				msg = "name already exist";
 			}
 
-			if (found == 0) {
+			else {
 				key = hash(connect_chan.req_shm);
-				comm_channel_t ch;
-				int status = comm_channel_create(key, connect_chan.req_shm, &ch);
+				int status = comm_channel_create(key, connect_chan.req_shm, &channels[index]);
 				if (status == -1) {
 					code = CODE_SERVER_ERR;
 					msg = "something went wrong";
 				} else {
-					int status = pthread_create(&workers[client_count], NULL, comm_channel_worker, &ch);
+					int status = pthread_create(&workers[index], NULL, comm_channel_worker, &channels[index]);
 					if (status != 0) {
 						perror("failed to create comm thread");
 						code = CODE_SERVER_ERR;
 						msg = "something went wrong";
 					} else {
-						strcpy(clients[client_count].name, connect_chan.req_shm);
-						clients[client_count].key = key;
+						strcpy(clients[index].name, connect_chan.req_shm);
+						clients[index].key = key;
 						client_count++;
 						printf("%d clients connected\n", client_count);
 

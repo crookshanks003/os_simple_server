@@ -32,6 +32,7 @@ enum actions {
 	ARITHMETIC,
 	EVEN_OR_ODD,
 	IS_PRIME,
+	DEREGISTER,
 };
 
 typedef struct {
@@ -51,6 +52,8 @@ typedef struct {
 
 // channel type for the communication channel
 typedef struct {
+	int req_shmid;
+	int res_shmid;
 	comm_request_t *req_shm;
 	comm_response_t *res_shm;
 	sem_t *sem;
