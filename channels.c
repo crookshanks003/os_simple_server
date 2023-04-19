@@ -1,4 +1,6 @@
 #include "channels.h"
+#include <semaphore.h>
+#include <stdio.h>
 #include <sys/mman.h>
 #include <sys/shm.h>
 
@@ -68,31 +70,53 @@ int hash(const char *name) {
 	return key;
 }
 
-int comm_channel_create(int key, comm_channel_t *ch) {
-	int req_fd = shmget(key + 113, 1024, IPC_CREAT | 0666);
+int comm_channel_create(int key, char *name, comm_channel_t *ch) {
+	int req_fd = shmget(key + 113, sizeof(comm_request_t), IPC_CREAT | 0666);
 	if (req_fd < 0) {
 		printf("failed to shmget req");
 		return -1;
 	}
-	char *req_shm = (char *)shmat(req_fd, NULL, 0);
-	if (req_shm == (char *)-1) {
+	comm_request_t *req_shm = (comm_request_t *)shmat(req_fd, NULL, 0);
+	if (req_shm == (comm_request_t *)-1) {
 		printf("failed to attach to shared mem for req");
 		return -1;
 	}
 
-	int res_fd = shmget(key + 115, 1024, IPC_CREAT | 0666);
+	int res_fd = shmget(key + 115, sizeof(comm_response_t), IPC_CREAT | 0666);
 	if (res_fd < 0) {
 		printf("failed to create shared mem for res");
 		return -1;
 	}
-	char *res_shm = (char *)shmat(res_fd, NULL, 0);
-	if (res_shm == (char *)-1) {
+	comm_response_t *res_shm = (comm_response_t *)shmat(res_fd, NULL, 0);
+	if (res_shm == (comm_response_t *)-1) {
 		printf("failed to attach to shared mem for res");
+		return -1;
+	}
+
+	char sem_name[256];
+	sprintf(sem_name, "/%s", name);
+	sem_t *sem = sem_open(sem_name, O_CREAT, 0666, 1);
+	if (sem == SEM_FAILED) {
+		perror("failed to open sem for connect channel");
 		return -1;
 	}
 
 	ch->res_shm = res_shm;
 	ch->req_shm = req_shm;
+	ch->sem = sem;
 
 	return 0;
+}
+
+void comm_channel_exit(comm_channel_t *ch) {
+	shmdt(ch->res_shm);
+	shmdt(ch->req_shm);
+	sem_close(ch->sem);
+}
+
+void clean_comm_channel_request(comm_channel_t *ch) {
+	ch->req_shm->n1 = 0;
+	ch->req_shm->n2 = 0;
+	ch->req_shm->op = (char)0;
+	ch->req_shm->action = -1;
 }

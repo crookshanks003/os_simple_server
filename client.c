@@ -13,6 +13,7 @@ connect_channel_t conn_ch;
 comm_channel_t comm_ch;
 
 int key = -1;
+int res_id = -1;
 
 void clean_conn_ch() {
 	conn_ch.res_shm->code = -1;
@@ -22,7 +23,6 @@ void clean_conn_ch() {
 }
 
 int connect(char *name) {
-	sem_post(conn_ch.res_sem);
 	sem_wait(conn_ch.req_sem);
 	strcpy(conn_ch.req_shm, name);
 	sem_post(conn_ch.req_sem);
@@ -30,7 +30,7 @@ int connect(char *name) {
 	int timeout = 0;
 	while (1) {
 		if (timeout / 10 == TIMEOUT) {
-			printf("connection timed out");
+			printf("connection timed out\n");
 			return -1;
 		}
 		sem_wait(conn_ch.res_sem);
@@ -46,7 +46,7 @@ int connect(char *name) {
 
 			clean_conn_ch();
 			sem_post(conn_ch.res_sem);
-			printf("connected to the server");
+			printf("connected to the server\n");
 			break;
 		}
 		sem_post(conn_ch.res_sem);
@@ -66,16 +66,46 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
+	sem_post(conn_ch.req_sem);
+	sem_post(conn_ch.res_sem);
 	int status = connect(argv[1]);
 	if (status < 0) {
 		printf("exiting...");
 		exit(1);
 	}
 
-	if (comm_channel_create(key, &comm_ch) != 0) {
-		printf("failed to connect to comm channel for");
+	if (comm_channel_create(key, argv[1], &comm_ch) != 0) {
+		printf("failed to connect to comm channel for\n");
 		exit(1);
 	}
 
+	res_id = comm_ch.res_shm->id;
+
+	sem_wait(comm_ch.sem);
+	comm_ch.req_shm->action = ARITHMETIC;
+	comm_ch.req_shm->n1 = 50;
+	comm_ch.req_shm->n2 = 80;
+	comm_ch.req_shm->op = '+';
+	comm_ch.req_shm->id += 1;
+	sem_post(comm_ch.sem);
+
+	int timeout = 0;
+	while (1) {
+		if (timeout / 10 == TIMEOUT) {
+			printf("connection timed out\n");
+			return -1;
+		}
+		sem_wait(comm_ch.sem);
+		if (comm_ch.res_shm->id > res_id) {
+			res_id = comm_ch.res_shm->id;
+
+			printf("id: %d  result: %d\n", res_id, comm_ch.res_shm->result);
+		}
+		sem_post(comm_ch.sem);
+		usleep(100);
+		timeout++;
+	}
+
 	connect_channel_exit(&conn_ch);
+	comm_channel_exit(&comm_ch);
 }
