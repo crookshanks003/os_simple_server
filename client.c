@@ -10,7 +10,8 @@
 #define TIMEOUT 3000
 
 connect_channel_t conn_ch;
-comm_channel_t comm_ch;
+
+client_t client;
 
 int key = -1;
 int res_id = -1;
@@ -42,7 +43,7 @@ int connect(char *name) {
 				sem_post(conn_ch.res_sem);
 				return -1;
 			}
-			key = conn_ch.res_shm->key;
+			client.key = conn_ch.res_shm->key;
 
 			clean_conn_ch();
 			sem_post(conn_ch.res_sem);
@@ -61,60 +62,61 @@ int main(int argc, char *argv[]) {
 		printf("A client-name must be provided as an argument");
 		exit(1);
 	}
+	strcpy(client.name, argv[1]);
 
 	if (connect_channel_create(&conn_ch) < 0) {
 		exit(1);
 	}
 
-	int status = connect(argv[1]);
+	int status = connect(client.name);
 	if (status < 0) {
 		printf("exiting...");
 		exit(1);
 	}
 
-	if (comm_channel_create(key, argv[1], &comm_ch) != 0) {
+	if (comm_channel_create(client.key, client.name, &client.ch) != 0) {
 		printf("failed to connect to comm channel for\n");
 		exit(1);
 	}
 
-	res_id = comm_ch.res_shm->id;
+	res_id = client.ch.res_shm->id;
 
-	// sem_wait(comm_ch.sem);
-	// comm_ch.req_shm->action = ARITHMETIC;
-	// comm_ch.req_shm->n1 = 50;
-	// comm_ch.req_shm->n2 = 80;
-	// comm_ch.req_shm->op = '+';
-	// comm_ch.req_shm->id += 1;
-	// sem_post(comm_ch.sem);
-	//
-	// int timeout = 0;
-	// while (1) {
-	// 	if (timeout / 10 == TIMEOUT) {
-	// 		printf("connection timed out\n");
-	// 		return -1;
-	// 	}
-	// 	sem_wait(comm_ch.sem);
-	// 	if (comm_ch.res_shm->id > res_id) {
-	// 		res_id = comm_ch.res_shm->id;
-	//
-	// 		printf("id: %d  result: %d\n", res_id, comm_ch.res_shm->result);
-	// 		sem_post(comm_ch.sem);
-	// 		break;
-	// 	}
-	// 	sem_post(comm_ch.sem);
-	// 	usleep(100);
-	// 	timeout++;
-	// }
+	sem_wait(client.ch.sem);
+	client.ch.req_shm->action = ARITHMETIC;
+	client.ch.req_shm->n1 = 50;
+	client.ch.req_shm->n2 = 80;
+	client.ch.req_shm->op = '+';
+	client.ch.req_shm->id += 1;
+	sem_post(client.ch.sem);
+
+	int timeout = 0;
+	while (1) {
+		if (timeout / 10 == TIMEOUT) {
+			printf("connection timed out\n");
+			return -1;
+		}
+		sem_wait(client.ch.sem);
+		if (client.ch.res_shm->id > res_id) {
+			res_id = client.ch.res_shm->id;
+
+			printf("id: %d  result: %d\n", res_id, client.ch.res_shm->result);
+			sem_post(client.ch.sem);
+			break;
+		}
+		sem_post(client.ch.sem);
+		usleep(100);
+		timeout++;
+	}
 
 	sleep(5);
 
-	sem_wait(comm_ch.sem);
+	sem_wait(client.ch.sem);
 	printf("deregistering...");
-	comm_ch.req_shm->action = DEREGISTER;
-	comm_ch.req_shm->n1 = key;
-	comm_ch.req_shm->id += 1;
-	sem_post(comm_ch.sem);
+	client.ch.req_shm->action = DEREGISTER;
+	client.ch.req_shm->n1 = key;
+	client.ch.req_shm->id += 1;
+	sem_post(client.ch.sem);
 
-	comm_channel_exit(&comm_ch);
+	comm_channel_exit(&client.ch);
 	connect_channel_exit(&conn_ch);
 }

@@ -59,6 +59,13 @@ typedef struct {
 	sem_t *sem;
 } comm_channel_t;
 
+// client type
+typedef struct {
+	char name[256];
+	int key;
+	comm_channel_t ch;
+} client_t;
+
 __BEGIN_DECLS
 
 /* Creates and connects to the connect channel. The shared memory object is stored in ch. */
