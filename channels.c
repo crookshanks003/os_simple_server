@@ -46,6 +46,8 @@ int connect_channel_create(connect_channel_t *ch) {
 	ch->req_sem = sem;
 	ch->res_sem = res_sem;
 
+	printf("[INFO] connect channel created\n");
+
 	return 0;
 }
 
@@ -104,6 +106,8 @@ int comm_channel_create(int key, char *name, comm_channel_t *ch) {
 	ch->sem = sem;
 	ch->req_shmid = req_shmid;
 	ch->res_shmid = res_shmid;
+
+	printf("[INFO] communication channel created\n");
 
 	return 0;
 }

@@ -47,6 +47,7 @@ void deregister(client_t *cl) {
 	strcpy(cl->name, "0");
 
 	client_count--;
+	printf("[INFO] cleaned communication channel");
 }
 
 void *comm_channel_worker(void *args) {
@@ -137,6 +138,7 @@ void *handle_connection_request(void *args) {
 					code = CODE_SERVER_ERR;
 					msg = "something went wrong";
 				} else {
+					printf("[INFO] creating new thread\n");
 					int status = pthread_create(&workers[index], NULL, comm_channel_worker, &clients[index]);
 					if (status != 0) {
 						perror("failed to create comm thread");
@@ -146,7 +148,7 @@ void *handle_connection_request(void *args) {
 						strcpy(clients[index].name, connect_chan.req_shm);
 						clients[index].key = key;
 						client_count++;
-						printf("%d clients connected\n", client_count);
+						printf("[INFO] %s client connected\n", clients[index].name);
 
 						code = CODE_SUCCESS;
 						msg = "success";
@@ -174,6 +176,8 @@ void *handle_connection_request(void *args) {
 }
 
 int main() {
+	setbuf(stdout, NULL);
+
 	if (connect_channel_create(&connect_chan) < 0) {
 		exit(1);
 	}
