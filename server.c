@@ -47,7 +47,7 @@ void deregister(client_t *cl) {
 	strcpy(cl->name, "0");
 
 	client_count--;
-	printf("[INFO] cleaned communication channel");
+	printf("[INFO] cleaned communication channel\n");
 }
 
 void *comm_channel_worker(void *args) {
@@ -106,13 +106,14 @@ void *comm_channel_worker(void *args) {
 }
 
 int get_empty_clients_index(char *name) {
+	int index = 0;
 	int i = 0;
 	while (clients[i].key != 0) {
-		if (clients[i].key == -1) break;
+		if (clients[i].key == -1) index = i;
 		if (strcmp(clients[i].name, name) == 0) return -1;
 		i++;
 	}
-	return i;
+	return index > 0 ? index : i;
 }
 
 void *handle_connection_request(void *args) {
