@@ -10,10 +10,8 @@
 #define TIMEOUT 3000
 
 connect_channel_t conn_ch;
-
 client_t client;
 
-int key = -1;
 int res_id = -1;
 
 void clean_conn_ch() {
@@ -47,7 +45,6 @@ int connect(char *name) {
 
 			clean_conn_ch();
 			sem_post(conn_ch.res_sem);
-			printf("connected to the server\n");
 			break;
 		}
 		sem_post(conn_ch.res_sem);
@@ -67,55 +64,94 @@ int main(int argc, char *argv[]) {
 	if (connect_channel_create(&conn_ch) < 0) {
 		exit(1);
 	}
-
 	int status = connect(client.name);
 	if (status < 0) {
 		printf("exiting...");
 		exit(1);
 	}
-
 	if (comm_channel_create(client.key, client.name, &client.ch) != 0) {
 		printf("failed to connect to comm channel for\n");
 		exit(1);
 	}
-
 	res_id = client.ch.res_shm->id;
+	printf("connected to the server\n");
 
-	sem_wait(client.ch.sem);
-	client.ch.req_shm->action = ARITHMETIC;
-	client.ch.req_shm->n1 = 50;
-	client.ch.req_shm->n2 = 80;
-	client.ch.req_shm->op = '+';
-	client.ch.req_shm->id += 1;
-	sem_post(client.ch.sem);
-
-	int timeout = 0;
 	while (1) {
-		if (timeout / 10 == TIMEOUT) {
-			printf("connection timed out\n");
-			return -1;
-		}
-		sem_wait(client.ch.sem);
-		if (client.ch.res_shm->id > res_id) {
-			res_id = client.ch.res_shm->id;
 
-			printf("id: %d  result: %d\n", res_id, client.ch.res_shm->result);
-			sem_post(client.ch.sem);
+		int action = -1;
+		printf("\nARITHMETIC: %d  EVEN_OR_ODD: %d  IS_PRIME: %d  DEREGISTER: %d\n", ARITHMETIC, EVEN_OR_ODD, IS_PRIME,
+			   DEREGISTER);
+		printf("select action: ");
+
+		if (scanf("%d", &action) != 1 || action > 3) {
+			printf("invalid action\n");
+			continue;
+		}
+
+		int n1, n2;
+		char op;
+
+		switch (action) {
+		case ARITHMETIC:
+			printf("operation: ");
+			if (scanf(" %c", &op) != 1 || (op != '+' && op != '-' && op != '*' && op != '/')) {
+				printf("invalid operation %c\n", op);
+				continue;
+			}
+			printf("n1: ");
+			if (scanf("%d", &n1) != 1) {
+				printf("invalid input\n");
+				continue;
+			}
+			printf("n2: ");
+			if (scanf("%d", &n2) != 1) {
+				printf("invalid input\n");
+				continue;
+			}
+			break;
+		case EVEN_OR_ODD:
+		case IS_PRIME:
+			printf("n1: ");
+			if (scanf("%d", &n1) != 1) {
+				printf("invalid input\n");
+				continue;
+			}
 			break;
 		}
+
+		sem_wait(client.ch.sem);
+		client.ch.req_shm->action = action;
+		client.ch.req_shm->n1 = n1;
+		client.ch.req_shm->n2 = n2;
+		client.ch.req_shm->op = op;
+		client.ch.req_shm->id += 1;
 		sem_post(client.ch.sem);
-		usleep(100);
-		timeout++;
+
+		if (action == DEREGISTER) {
+			printf("exiting...");
+			break;
+		}
+
+		int timeout = 0;
+		while (1) {
+			if (timeout / 10 == TIMEOUT) {
+				printf("connection timed out\n");
+				break;
+			}
+			sem_wait(client.ch.sem);
+			if (client.ch.res_shm->id > res_id) {
+				res_id = client.ch.res_shm->id;
+
+				if (client.ch.res_shm->code > 0) printf("%s\n", client.ch.res_shm->msg);
+				printf("id: %d  result: %d\n", res_id, client.ch.res_shm->result);
+				sem_post(client.ch.sem);
+				break;
+			}
+			sem_post(client.ch.sem);
+			usleep(100);
+			timeout++;
+		}
 	}
-
-	sleep(5);
-
-	sem_wait(client.ch.sem);
-	printf("deregistering...");
-	client.ch.req_shm->action = DEREGISTER;
-	client.ch.req_shm->n1 = key;
-	client.ch.req_shm->id += 1;
-	sem_post(client.ch.sem);
 
 	comm_channel_exit(&client.ch);
 	connect_channel_exit(&conn_ch);

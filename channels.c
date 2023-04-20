@@ -50,8 +50,6 @@ int connect_channel_create(connect_channel_t *ch) {
 }
 
 void connect_channel_exit(connect_channel_t *ch) {
-	sem_close(ch->req_sem);
-	sem_close(ch->res_sem);
 	shmdt(ch->req_shm);
 	shmdt(ch->res_shm);
 	return;
